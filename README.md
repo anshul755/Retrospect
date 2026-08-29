@@ -1,106 +1,290 @@
-# 🏦 Retrospect
+# Retrospect
 
 ### Bi-Temporal Enterprise Database Management System
 
-> **An enterprise-grade insurance database platform powered by bi-temporal data management, enabling complete historical tracking, temporal querying, auditing, and regulatory compliance.**
+> An insurance database platform built on bi-temporal data management — complete historical tracking, temporal querying, auditing, and regulatory compliance baked into the schema itself.
 
 <div align="center">
-  <img src="https://img.shields.io/badge/PostgreSQL-14%2B-blue?style=for-the-badge&logo=postgresql" alt="PostgreSQL"/>
-  <img src="https://img.shields.io/badge/Python-3.x-3776AB?style=for-the-badge&logo=python" alt="Python"/>
-  <img src="https://img.shields.io/badge/Jupyter-Notebook-F37626?style=for-the-badge&logo=jupyter" alt="Jupyter"/>
-  <img src="https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge" alt="License"/>
+  <img src="https://img.shields.io/badge/PostgreSQL-14%2B-336791?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL"/>
+  <img src="https://img.shields.io/badge/Python-3.x-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python"/>
+  <img src="https://img.shields.io/badge/PL%2FpgSQL-Triggers%20%26%20Procedures-336791?style=for-the-badge&logo=postgresql&logoColor=white" alt="PL/pgSQL"/>
+  <img src="https://img.shields.io/badge/Jupyter-Notebook-F37626?style=for-the-badge&logo=jupyter&logoColor=white" alt="Jupyter"/>
 </div>
 
-<br>
+---
 
-Welcome to the **Bi-Temporal Enterprise Database Management System**. This project showcases the architectural transformation of a traditional, static relational database into an industrial-grade, time-traveling enterprise database. 
+## Table of Contents
 
-Designed specifically for the highly-regulated insurance sector, this database guarantees **100% data immutability and autonomous auditing**, ensuring no historical data is ever permanently lost or destroyed.
+1. [The Problem](#the-problem-destructive-updates)
+2. [The Solution](#the-solution-bi-temporal-architecture)
+3. [Core Features](#core-features)
+4. [System Architecture](#system-architecture)
+5. [Project Structure](#project-structure)
+6. [Getting Started](#getting-started)
+7. [Time-Travel Demos](#time-travel-demonstrations)
+8. [Testing](#testing--validation)
+9. [Documentation](#documentation)
+10. [Tech Stack](#tech-stack)
 
 ---
 
-## 📖 Table of Contents
-1. [The Problem: Destructive Updates](#-the-problem-destructive-updates)
-2. [The Solution: Bi-Temporal Architecture](#-the-solution-bi-temporal-architecture)
-3. [Core Features](#-core-features)
-4. [Project Structure](#-project-structure)
-5. [Getting Started (Setup Guide)](#-getting-started-setup-guide)
-6. [Time-Travel Demonstrations](#-time-travel-demonstrations)
-7. [System Architecture](#-system-architecture)
+## The Problem: Destructive Updates
+
+Standard relational databases overwrite data in place. When a customer moves cities or a policy premium changes, the old value is gone — a regular `UPDATE` or `DELETE` physically destroys whatever was there before.
+
+```
+  Customer moves from Delhi -> Mumbai
+
+  BEFORE:  { city: "Delhi",  updated: "2023-01-01" }
+  AFTER:   { city: "Mumbai", updated: "2024-06-15" }
+
+  "Delhi" is permanently destroyed. No trace it ever existed.
+```
+
+In regulated industries like insurance, this is a serious problem. You can't process retroactive claims, you can't reconstruct what a policy looked like three years ago, and you can't answer basic audit questions like *"what did we have on record on March 3rd, 2022?"*
 
 ---
 
-## 🚨 The Problem: Destructive Updates
+## The Solution: Bi-Temporal Architecture
 
-Traditional Relational Database Management Systems (RDBMS) suffer from a critical flaw when applied to highly regulated industries: **destructive updates**. 
+This project re-engineers the database to track **two independent time dimensions** on every row:
 
-When a customer moves to a new city or an insurance policy premium is updated, standard SQL `UPDATE` and `DELETE` commands physically overwrite or destroy the previous data. This permanent loss of historical context makes it impossible to accurately process retroactive claims, perform compliance auditing, or reconstruct the exact state of a policy as it existed three years ago.
+| Dimension | What it tracks | Example |
+|:--|:--|:--|
+| **Valid Time** | When the fact is true in the real world | "This policy is active Jan 1 – Dec 31" |
+| **Transaction Time** | When the system recorded the fact | "Entered by the clerk on Jan 5 at 14:32" |
 
----
+PostgreSQL triggers intercept every `UPDATE` and `DELETE` at the engine level. Instead of destroying data, the trigger:
 
-## 💡 The Solution: Bi-Temporal Architecture
+1. Archives the old row into a `_history` table with closed timestamps
+2. Inserts the new version into the active table with a bumped version number
+3. Links both so the full timeline is always reconstructable
 
-To solve this, we completely re-engineered the backend into a **Bi-Temporal Database**. The system natively tracks two dimensions of time for every single row of data:
-1. **Valid Time:** When a fact is true in the real world (e.g., "This policy is active from Jan 1 to Dec 31").
-2. **Transaction Time:** When the system actually recorded the fact (e.g., "The clerk entered this into the computer on Jan 5").
-
-By deploying autonomous PostgreSQL Triggers, the database intercepts *every* `UPDATE` and `DELETE` operation. Instead of destroying the data, it archives the old version into a `_history` table and inserts the new version.
-
----
-
-## ✨ Core Features
-
-*   **Immutable Auditing:** The database manages versioning autonomously via Triggers. Zero historical tracking code is required in the application layer.
-*   **Time-Travel Queries:** Utilizing Temporal Views and GiST (Generalized Search Tree) indexes, analysts can query the exact state of the database *as it existed at any millisecond in the past*.
-*   **Logical Deletes:** A `DELETE` command removes the data from the active table but permanently preserves it in the history table, allowing full recovery.
-*   **Strict Database API:** 14 encapsulated Stored Procedures govern all data entry, preventing invalid financial states at the lowest possible level.
+The result is an append-only audit log that still behaves like a normal database from the outside.
 
 ---
 
-## 📁 Project Structure
+## Core Features
 
-The repository is divided into chronological phases to demonstrate the evolution:
-
-- 📂 **`Phase 1-Legacy_Simple_DBMS/`**: Contains the traditional, static database schema (the flawed architecture that destroys history).
-- 📂 **`Phase 2-Bi-Temporal_DBMS/`**: The enterprise solution. Includes DDL for active/history tables, PL/pgSQL triggers, the baseline data generation, and time-travel views.
-- 📂 **`Phase 3-Comparison/`**: Contains architectural comparison reports.
-- 📂 **`Project Documentation/`**: Contains the comprehensive thesis, ER diagrams, and `User Guide.md`.
-
----
-
-## 🚀 Getting Started (Setup Guide)
-
-### Prerequisites
-*   **PostgreSQL 14+**
-*   **Python 3.x** (with `pandas`, `sqlalchemy`, `psycopg2-binary`)
-*   **Jupyter Notebook**
-
-### Installation & Execution
-1. **Prepare PostgreSQL:** Create an empty database named `insurance_bitemporal` in pgAdmin.
-2. **Configure Credentials:** Open `Phase 2-Bi-Temporal_DBMS/Insurance database Python Code.ipynb` and update the database connection string with your local PostgreSQL `username` and `password`.
-3. **Initialize the Database:** Run the notebook cells sequentially. The `initialize_database()` function will automatically deploy the tables, triggers, procedures, and generate 100 realistic rows of baseline data.
-4. **Generate History:** Uncomment and run the `run_temporal_demo()` cell. This will execute simulated real-world updates (address changes, policy renewals) to prove that the database automatically archives the old states.
-
-> **Note:** For a full, guided walkthrough of the presentation, please read the [User Guide](Project%20Documentation/User%20Guide.md).
+- **Immutable Auditing** — Versioning happens autonomously via triggers. No tracking code needed in the application layer.
+- **Time-Travel Queries** — Temporal views and GiST indexes let you query the exact state of the database at any point in the past.
+- **Logical Deletes** — `DELETE` removes data from the active table but preserves it permanently in history.
+- **Strict Database API** — 14 stored procedures encapsulate all data entry and reject invalid financial states at the engine level.
+- **GiST Indexed** — Generalized Search Tree indexes on temporal ranges for fast time-travel lookups.
+- **Automated Data Generation** — Python scripts generate 100+ realistic baseline records for testing.
 
 ---
 
-## ⏳ Time-Travel Demonstrations
+## System Architecture
 
-Once the database is initialized, you can use the Time-Travel queries to prove its capabilities. Open `Phase 2-Bi-Temporal_DBMS/Insurance database Temporal Queries.sql` in pgAdmin.
+<p align="center">
+  <img src="UML diagram.jpg" alt="System UML Diagram" width="720"/>
+</p>
 
-You can execute queries like the **AS OF Query** to view the database exactly as it looked in the past:
-
-```sql
-SELECT customer_id, first_name, last_name, city
-FROM insurance.v_customer_timeline
-WHERE (CURRENT_TIMESTAMP - INTERVAL '5 minutes') BETWEEN transaction_from AND transaction_to;
+```
++------------------------------------------------------------------+
+|                        APPLICATION LAYER                          |
+|                   (Jupyter Notebook / pgAdmin)                    |
++------------------------------+-----------------------------------+
+                               |  SQL Calls
+                               v
++------------------------------------------------------------------+
+|                     API LAYER (Stored Procedures)                 |
+|                                                                   |
+|  create_customer()  .  update_customer_address()                  |
+|  create_policy()    .  update_policy_premium()                    |
+|  register_claim()   .  approve_claim()                            |
+|  record_payment()   .  ... (14 total)                             |
+|                                                                   |
+|  Encapsulates business logic.                                     |
+|  RAISE EXCEPTION to rollback invalid transactions.                |
++------------------------------+-----------------------------------+
+                               |  DML Operations
+                               v
++------------------------------------------------------------------+
+|                  AUTOMATION LAYER (PL/pgSQL Triggers)             |
+|                                                                   |
+|  - Intercepts every UPDATE and DELETE on every table              |
+|  - Archives old row into _history table (closed timestamps)       |
+|  - Spawns new version in active table (bumped version_number)     |
+|  - Flags logical deletes with is_current = FALSE                  |
++------------------------------+-----------------------------------+
+                               |
+                               v
++------------------------------------------------------------------+
+|                       STORAGE LAYER                               |
+|                                                                   |
+|   Active Tables          History Tables (_history suffix)         |
+|        |                        |                                 |
+|        +----------+-------------+                                 |
+|                   v                                               |
+|           UNION ALL Views + GiST Indexes                          |
+|           (seamless timeline querying)                             |
++------------------------------------------------------------------+
 ```
 
 ---
 
-## 🏗️ System Architecture
+## Project Structure
 
-1.  **API Layer (Stored Procedures):** Encapsulates business logic and throws exceptions to rollback invalid transactions.
-2.  **Automation Layer (Triggers):** A dynamic PL/pgSQL function attached to every table that intercepts all DML operations.
-3.  **Storage Layer:** Active tables and History shadow tables, overlaid with `UNION ALL` Views to allow seamless querying across the entire timeline.
+```
+Retrospect/
+|
+|-- Phase 1-Legacy_Simple_DBMS/         # Traditional static database (the "before")
+|   |-- ER Diagram.png
+|   |-- Insurance database DDL.sql
+|   |-- Insurance database DML.sql
+|   |-- Insurance database DQL.sql
+|   |-- Insurance database DCL.sql
+|   |-- Insurance database TCL.sql
+|   |-- Insurance database Sample Data.sql
+|   |-- Insurance database python code.ipynb
+|   +-- README.md
+|
+|-- Phase 2-Bi-Temporal_DBMS/           # The bi-temporal solution
+|   |-- Bi-Temporal ER Diagram.png
+|   |-- Insurance database Bi-Temporal DDL.sql
+|   |-- Insurance database Bi-Temporal DML.sql
+|   |-- Insurance database Bi-Temporal DQL.sql
+|   |-- Insurance database Triggers.sql
+|   |-- Insurance database Procedures.sql
+|   |-- Insurance database Functions.sql
+|   |-- Insurance database Temporal Demo.sql
+|   |-- Insurance database Temporal Queries.sql
+|   |-- Insurance database Python Code.ipynb
+|   +-- README.md
+|
+|-- Phase 3-Comparison/                 # Architectural analysis
+|   |-- Feature Comparison.md
+|   |-- Legacy vs Bi-Temporal Database.md
+|   |-- Performance Comparison.md
+|   +-- Query Comparison.md
+|
+|-- Project Documentation/              # Thesis and guides
+|   |-- Official_Documentation_Compiled.pdf
+|   |-- Official_Documentation_Compiled.md
+|   |-- Software Architecture.md
+|   |-- User Guide.md
+|   +-- Project README.md
+|
+|-- UML diagram.jpg
+|-- testing_report.md
+|-- requirements.txt
++-- README.md
+```
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- **PostgreSQL 14+**
+- **Python 3.x** with `pandas`, `sqlalchemy`, `psycopg2-binary`
+- **Jupyter Notebook**
+- **pgAdmin** (optional, for GUI access)
+
+### Setup
+
+**1. Clone the repo**
+```bash
+git clone https://github.com/anshul755/Retrospect.git
+cd Retrospect
+```
+
+**2. Install dependencies**
+```bash
+pip install -r requirements.txt
+```
+
+**3. Create the database**
+```sql
+CREATE DATABASE insurance_bitemporal;
+```
+
+**4. Configure credentials**
+
+Open `Phase 2-Bi-Temporal_DBMS/Insurance database Python Code.ipynb` and update the connection string with your PostgreSQL username and password.
+
+**5. Initialize**
+
+Run the notebook cells in order. `initialize_database()` will set up tables, triggers, procedures, and generate 100 rows of baseline data.
+
+**6. Generate temporal history**
+
+Uncomment and run the `run_temporal_demo()` cell. This simulates real-world changes (address updates, policy renewals, claim processing) and proves the database archives every previous state automatically.
+
+> For a detailed walkthrough, see the [User Guide](Project%20Documentation/User%20Guide.md).
+
+---
+
+## Time-Travel Demonstrations
+
+Open `Phase 2-Bi-Temporal_DBMS/Insurance database Temporal Queries.sql` in pgAdmin and run queries like:
+
+**AS OF Query** — what did the database look like 5 minutes ago?
+
+```sql
+SELECT customer_id, first_name, last_name, city
+FROM insurance.v_customer_timeline
+WHERE (CURRENT_TIMESTAMP - INTERVAL '5 minutes')
+      BETWEEN transaction_from AND transaction_to;
+```
+
+**Version History** — every change ever made to a customer:
+
+```sql
+SELECT version_number, city, transaction_from, transaction_to, is_current
+FROM insurance.v_customer_timeline
+WHERE customer_id = 1
+ORDER BY version_number;
+```
+
+**Logical Delete Recovery** — what was deleted and when?
+
+```sql
+SELECT *
+FROM insurance.customer_history
+WHERE is_current = FALSE
+  AND operation_type = 'DELETE';
+```
+
+---
+
+## Testing & Validation
+
+All tests pass. Full details in [testing_report.md](testing_report.md).
+
+| Test | What it proves | Result |
+|:--|:--|:--|
+| API Execution | Procedures insert data with `version_number = 1` and infinity end-dates | Pass |
+| Temporal Versioning | Triggers archive V1 to history, spawn V2 in active table | Pass |
+| Coverage Constraints | Claims exceeding policy coverage are rejected | Pass |
+| Payment Validation | Mismatched payments rejected by `payment_check_fn` trigger | Pass |
+| Workflow State Mgmt | Claim lifecycle (PENDING to APPROVED) creates linked version timeline | Pass |
+| Backward Compatibility | Raw `DELETE` is intercepted; data archived, never destroyed | Pass |
+
+---
+
+## Documentation
+
+| Document | Description |
+|:--|:--|
+| [User Guide](Project%20Documentation/User%20Guide.md) | Step-by-step walkthrough |
+| [Software Architecture](Project%20Documentation/Software%20Architecture.md) | Technical architecture details |
+| [Official Documentation (PDF)](Project%20Documentation/Official_Documentation_Compiled.pdf) | Compiled thesis |
+| [Feature Comparison](Phase%203-Comparison/Feature%20Comparison.md) | Legacy vs bi-temporal feature matrix |
+| [Performance Comparison](Phase%203-Comparison/Performance%20Comparison.md) | Benchmark analysis |
+| [Query Comparison](Phase%203-Comparison/Query%20Comparison.md) | Side-by-side SQL comparison |
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|:--|:--|
+| Database | PostgreSQL 14+ with PL/pgSQL |
+| Temporal Engine | Custom triggers, stored procedures, GiST-indexed temporal views |
+| Data Generation | Python 3, Pandas, SQLAlchemy, psycopg2 |
+| Visualization | Plotly, Jupyter Notebook |
+| Documentation | Markdown, PDF |
